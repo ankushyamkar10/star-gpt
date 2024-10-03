@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"
+    />
+
+    <title>Starred Conversations</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 12px;
+        width: 85vw;
+        padding-top: 0;
+      }
+      h3 {
+        font-size: 16px;
+        margin-bottom: 10px;
+      }
+      ol {
+        list-style-type: none;
+        padding: 0;
+      }
+      li {
+        margin-bottom: 8px;
+      }
+      a {
+        text-decoration: none;
+        color: #007bff;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 12px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        cursor: pointer;
+        border-radius: 5px;
+        font-size: 12px;
+        width: 40px;
+        height: 40px;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Starred Conversations</h3>
+    <ol id="conversation-list">
+      <!-- Starred conversations will be loaded here -->
+    </ol>
+    <button id="refresh-button">
+      <i class="fas fa-sync-alt"></i>
+    </button>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
