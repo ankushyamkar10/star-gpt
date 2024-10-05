@@ -1,130 +1,140 @@
-let previousUrl = '';
+let previousUrl = "";
 let buttonClickedId = "";
 
-const observer = new MutationObserver(function(mutations) {
+const observer = new MutationObserver(function (mutations) {
   if (location.href !== previousUrl) {
-      previousUrl = location.href;
+    previousUrl = location.href;
 
-      if(location.href.startsWith('https://chatgpt.com/c/')){
-        waitForReactContent();
-      } else {
-        removeExistingButton();
-      }
+    if (location.href.startsWith("https://chatgpt.com/c/")) {
+      waitForReactContent();
+      console.log("first");
+    } else {
+      removeExistingButton();
     }
+  }
 });
 
 function removeExistingButton() {
   const existingButton = document.getElementById("gpt-star-button");
   if (existingButton) {
-      existingButton.remove();
+    existingButton.remove();
   }
 }
 
 function waitForReactContent() {
   const observer = new MutationObserver((mutations, obs) => {
-      const appContent = document.querySelector(
-          'div[class^="react-scroll-to-bottom"]'
-      );
-      if (appContent) {
-          obs.disconnect();
-          initializeExtension();
-          addButtonListeners();
-          console.log("gee")
-
-      }
+    const appContent = document.querySelector(
+      'div[class^="react-scroll-to-bottom"]'
+    );
+    if (appContent) {
+      obs.disconnect();
+      initializeExtension();
+    }
   });
 
-
   observer.observe(document.body, {
-      childList: true,
-      subtree: true,
+    childList: true,
+    subtree: true,
   });
 }
 
 async function initializeExtension() {
-  chrome.storage.local.get("starred-gpt-conversations", (result) => {
-      const conversations = result["starred-gpt-conversations"] || [];
+  chrome.runtime.sendMessage(
+    { action: "getStarredConversations" },
+    (response) => {
+      const conversations = response.conversations || [];
       const url = window.location.href;
       let isStarred = conversations.some((conv) => conv.url === url);
 
-      removeExistingButton(); 
-
+      removeExistingButton();
       const starButton = document.createElement("button");
       starButton.id = "gpt-star-button";
-      starButton.textContent = isStarred ? "Starred" : "Star";
-      starButton.style.position = "fixed";
-      starButton.style.top = "50px";
-      starButton.style.right = "10px";
-      starButton.style.zIndex = "9999";
-      starButton.style.padding = "5px 10px";
-      starButton.style.backgroundColor = isStarred ? "#ffd700" : "transparent";
-      starButton.style.color = "white";
-      starButton.style.border = "1px solid #000000";
-      starButton.style.borderRadius = "5px";
+      starButton.appendChild(createStarIcon(isStarred));
+      starButton.style.background = "none";
+      starButton.style.border = "none";
       starButton.style.cursor = "pointer";
-
-      document.body.appendChild(starButton);
+      starButton.style.color = isStarred ? "#ffd700" : "#ffffff";
+      starButton.style.marginLeft = "right"; // Add some spacing between buttons
+  
+      // Find the target button
+      const targetButton = document.querySelector('[data-testid="share-chat-button"]');
+      if (targetButton && targetButton.parentNode) {
+        // Insert the star button before the target button
+        targetButton.parentNode.insertBefore(starButton, targetButton);
+      } else {
+        console.error("Target button not found");
+        return;
+      }
 
       starButton.onclick = function (event) {
-          event.stopPropagation();
+        event.stopPropagation();
 
-          if (!isStarred) {
-              const preferredName = prompt(
-                  "Enter keywords separated by ',' for this conversation:"
-              );
-              if (preferredName) {
-                  conversations.push({ name: preferredName, url: url });
-                  chrome.storage.local.set({
-                      "starred-gpt-conversations": conversations,
-                  });
-                  starButton.textContent = "Starred";
-                  starButton.style.backgroundColor = "#ffd700";
+        if (!isStarred) {
+          const preferredName = prompt(
+            "Enter keywords separated by ',' for this conversation:"
+          );
+          if (preferredName) {
+            chrome.runtime.sendMessage(
+              {
+                action: "starConversation",
+                conversation: { name: preferredName, url: url },
+              },
+              (response) => {
+                if (response.success) {
+                  starButton.innerHTML = '';
+                  starButton.appendChild(createStarIcon(true));
+                  starButton.style.color = "#ffd700";
+                  isStarred = true;
+                }
               }
-              isStarred = true;
-          } else {
-              if (confirm("Do you really want to unstar the conversation?")) {
-                  const index = conversations.findIndex((conv) => conv.url === url);
-                  if (index !== -1) {
-                      conversations.splice(index, 1);
-                      chrome.storage.local.set({
-                          "starred-gpt-conversations": conversations,
-                      });
-                      starButton.textContent = "Star";
-                      starButton.style.backgroundColor = "transparent";
-                      isStarred = false;
-                  }
-              }
+            );
           }
+        } else {
+          if (confirm("Do you really want to unstar the conversation?")) {
+            chrome.runtime.sendMessage(
+              {
+                action: "unstarConversation",
+                url: url,
+              },
+              (response) => {
+                if (response.success) {
+                  starButton.innerHTML = '';
+                  starButton.appendChild(createStarIcon(false));
+                  starButton.style.color = "#ffffff";
+                  isStarred = false;
+                }
+              }
+            );
+          }
+        }
       };
-  });
+    }
+  );
 }
 
-// Function to add event listeners to buttons
-function addButtonListeners() {
-    // Select all buttons that have aria-controls starting with 'radix-:'
-    const buttons = document.querySelectorAll('button[aria-controls^="radix-:"]');
-    console.log("Adding listeners to SVG children");
-  
-    if (buttons.length > 0) {
-      buttons.forEach(button => {
-        // Select the SVG child of the current button
-        const svg = button.querySelector('svg');
-        
-        if (svg) {
-          svg.addEventListener('click', (event) => {
-            // Get the parent button element
-            const parentButton = event.currentTarget.closest('button[aria-controls^="radix-:"]');
-            
-            if (parentButton) {
-              console.log(`Button with aria-controls ${parentButton.getAttribute('aria-controls')} clicked via SVG`);
-            }
-          });
-        }
-      });
-    }
-  }
-  
-  
 
-const config = {subtree: true, childList: true};
+const config = { subtree: true, childList: true };
 observer.observe(document, config);
+
+function createStarIcon(filled) {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("width", "24");
+  svg.setAttribute("height", "24");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+
+  const path = document.createElementNS(svgNS, "path");
+  path.setAttribute("d", "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z");
+  
+  if (filled) {
+    path.setAttribute("fill", "currentColor");
+  }
+
+  svg.appendChild(path);
+  return svg;
+}
