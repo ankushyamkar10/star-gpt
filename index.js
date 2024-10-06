@@ -1,15 +1,28 @@
 let previousUrl = "";
 let buttonClickedId = "";
 
+// Debounce function to limit the rate at which a function can fire
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
 const observer = new MutationObserver(function (mutations) {
   if (location.href !== previousUrl) {
     previousUrl = location.href;
 
     if (location.href.startsWith("https://chatgpt.com/c/")) {
       waitForReactContent();
-      console.log("first");
     } else {
       removeExistingButton();
+      checkOrderedList();
     }
   }
 });
@@ -29,6 +42,7 @@ function waitForReactContent() {
     if (appContent) {
       obs.disconnect();
       initializeExtension();
+      checkOrderedList();
     }
   });
 
@@ -85,6 +99,7 @@ async function initializeExtension() {
                   starButton.appendChild(createStarIcon(true));
                   starButton.style.color = "#ffd700";
                   isStarred = true;
+                  checkOrderedList(); // Refresh the list to show the new star
                 }
               }
             );
@@ -102,6 +117,7 @@ async function initializeExtension() {
                   starButton.appendChild(createStarIcon(false));
                   starButton.style.color = "#ffffff";
                   isStarred = false;
+                  checkOrderedList(); // Refresh the list to remove the star
                 }
               }
             );
@@ -111,7 +127,6 @@ async function initializeExtension() {
     }
   );
 }
-
 
 const config = { subtree: true, childList: true };
 observer.observe(document, config);
@@ -138,3 +153,61 @@ function createStarIcon(filled) {
   svg.appendChild(path);
   return svg;
 }
+
+function checkOrderedList() {
+  const orderedLists = document.querySelectorAll('ol'); // Get all <ol> elements
+  
+  if (orderedLists.length) {
+    chrome.runtime.sendMessage({ action: "getStarredConversations" }, (response) => {
+      const conversations = response.conversations || [];
+
+      // Loop through each <ol>
+      orderedLists.forEach(ol => {
+        const listItems = ol.querySelectorAll('li'); // Get all <li> within this <ol>
+
+        listItems.forEach(li => {
+          const anchor = li.querySelector('a');
+          if (anchor) {
+            const href = anchor.getAttribute('href');
+            const isStarred = conversations.some(conv => conv.url.endsWith(href));
+
+            // Remove existing star if present
+            const existingStar = anchor.querySelector('.star-icon');
+            if (existingStar) {
+              existingStar.remove();
+            }
+
+            if (isStarred) {
+              const starIcon = document.createElement('span');
+              starIcon.className = 'star-icon';
+              starIcon.textContent = '⭐ ';
+              starIcon.style.marginRight = '5px';
+              
+              // Insert the star icon at the beginning of the anchor content
+              anchor.insertBefore(starIcon, anchor.firstChild);
+            }
+          }
+        });
+      });
+    });
+  }
+}
+
+// Debounced version of checkOrderedList
+const debouncedCheckOrderedList = debounce(checkOrderedList, 300);
+
+// Call checkOrderedList on initial load
+window.addEventListener('load', checkOrderedList);
+
+// Set up a MutationObserver to watch for changes in the ordered lists
+const listObserver = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    if (mutation.type === 'childList' && 
+        (mutation.target.tagName === 'OL' || mutation.target.tagName === 'LI')) {
+      debouncedCheckOrderedList();
+    }
+  });
+});
+
+// Start observing the document with the configured parameters
+listObserver.observe(document.body, { childList: true, subtree: true });
